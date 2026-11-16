@@ -1,9 +1,10 @@
 {
   "name": "cli_player",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test",
+    "start": "node start.js"
   },
   "repository": {
     "type": "git",
@@ -16,5 +17,8 @@
     "url": "https://github.com/Dadi-Dinesh/cli_player/issues"
   },
   "homepage": "https://github.com/Dadi-Dinesh/cli_player#readme",
-  "description": ""
+  "description": "Dual-mode VLC music player for the terminal",
+  "engines": {
+    "node": ">=22"
+  }
 }

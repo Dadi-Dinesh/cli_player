@@ -76,6 +76,10 @@ class VlcPlayer extends EventEmitter {
             failure = 'VLC timed out opening the track.';
             void this.closeSession();
         }, 20000);
+        // oldrc may buffer state notifications until it processes a command.
+        const statusPoll = setInterval(() => {
+            if (!session.started || session.pendingPause) this.send('status');
+        }, 250);
 
         child.stdout.setEncoding('utf8');
         child.stdout.on('data', chunk => {
@@ -83,14 +87,14 @@ class VlcPlayer extends EventEmitter {
             const lines = (output + chunk).split('\n');
             output = lines.pop().slice(-4096);
             for (const line of lines) {
-                const state = line.match(/^status change: \( (?:play|pause) state: ([34]) \)/);
+                const state = line.match(/^status change: \( (play state: 3|pause state: 4) \)/);
                 if (!state) continue;
                 if (!session.started) {
                     session.started = true;
                     clearTimeout(startup);
                     this.send('volume ' + toVlcVolume(this.volume));
                 }
-                const status = state[1] === '4' ? 'Paused' : 'Playing';
+                const status = state[1] === 'pause state: 4' ? 'Paused' : 'Playing';
                 if (status !== this.status) {
                     session.pendingPause = false;
                     this.update(status);
@@ -118,6 +122,7 @@ class VlcPlayer extends EventEmitter {
         });
         session.closed = new Promise(done => child.once('close', code => {
             clearTimeout(startup);
+            clearInterval(statusPoll);
             clearTimeout(session.killTimer);
             this.session = null;
             this.track = null;
