@@ -1,15 +1,17 @@
 #!/bin/zsh -l
 
 cd -- "${0:A:h}" || exit 1
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
 
-if ! command -v node >/dev/null 2>&1 || ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) < 22)' 2>/dev/null; then
-    print -u2 "CHILL AVVU MAMA needs Node.js 22 or newer."
-    print -u2 "Install it from https://nodejs.org/ and open this launcher again."
-    if [[ -t 0 ]]; then
-        read -r '?Press Enter to close. '
+for node_path in "${(@f)$(whence -pa node)}"; do
+    if "$node_path" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)' 2>/dev/null; then
+        exec "$node_path" start.js
     fi
-    exit 1
-fi
+done
 
-exec node start.js
+print -u2 "CHILL AVVU MAMA needs Node.js 22 or newer."
+print -u2 "Install it from https://nodejs.org/ and open this launcher again."
+if [[ -t 0 ]]; then
+    read -r '?Press Enter to close. '
+fi
+exit 1

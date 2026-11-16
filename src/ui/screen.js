@@ -20,7 +20,9 @@ function duration(seconds) {
     return ` [${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, '0')}]`;
 }
 
-function screen(view, player, { rows = 24, columns = 80 } = {}) {
+function screen(view, player, size = {}) {
+    const rows = size.rows || 24;
+    const columns = size.columns || 80;
     if (view.page === 'welcome') {
         return box(['', TITLE, '', 'CLI MUSIC PLAYER', '', '▶ START', '', 'Press ENTER to Start', '']);
     }

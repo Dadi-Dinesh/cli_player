@@ -54,12 +54,13 @@ class VlcPlayer extends EventEmitter {
 
         let child;
         try {
+            const { AUDIUS_API_KEY, AUDIUS_BEARER_TOKEN, ...env } = process.env;
             child = this.spawnProcess(this.executable(), [
                 '--ignore-config', '-I', 'oldrc', '--rc-fake-tty', '--no-media-library',
                 '--no-video', '--play-and-exit', '--no-volume-save',
                 ...(process.platform === 'darwin' ? ['--auhal-volume=' + toVlcVolume(this.volume)] : []),
                 ...this.extraArgs, '--', source
-            ], { stdio: ['pipe', 'pipe', 'pipe'] });
+            ], { env, stdio: ['pipe', 'pipe', 'pipe'] });
         } catch (error) {
             this.track = null;
             this.update('Stopped', error.message);
