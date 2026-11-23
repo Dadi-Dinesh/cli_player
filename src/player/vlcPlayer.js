@@ -56,7 +56,10 @@ class VlcPlayer extends EventEmitter {
         try {
             const { AUDIUS_API_KEY, AUDIUS_BEARER_TOKEN, YOUTUBE_API_KEY, ...env } = process.env;
             child = this.spawnProcess(this.executable(), [
-                '--ignore-config', '-I', 'oldrc', '--rc-fake-tty', '--no-media-library',
+                '--ignore-config',
+                ...(video && process.platform === 'darwin'
+                    ? ['-I', 'macosx', '--extraintf', 'oldrc'] : ['-I', 'oldrc']),
+                '--rc-fake-tty', '--no-media-library',
                 ...(video ? ['--video', '--no-embedded-video'] : ['--no-video']),
                 ...(audioSource ? ['--input-slave=' + audioSource] : []),
                 ...(userAgent ? ['--http-user-agent=' + userAgent] : []),
@@ -112,8 +115,10 @@ class VlcPlayer extends EventEmitter {
             diagnostics = (diagnostics + chunk).slice(-4096);
             if (/failed to create audio output|module not functional/i.test(diagnostics)) {
                 failure = 'VLC could not open an audio output device.';
-            } else if (/video output creation failed|failed to create video output/i.test(diagnostics)) {
+            } else if (/video output creation failed|failed to create video output|Cannot create vout as Mac OS X interface was not found/i.test(diagnostics)) {
                 failure = 'VLC could not open a video window. Try launching from macOS Terminal.';
+            } else if (/HTTP 403 error|HTTP[^\n]*403 Forbidden/i.test(diagnostics)) {
+                failure = 'The media server rejected this stream (HTTP 403). Press Enter to request a fresh stream, or try another selection.';
             } else if (/your input can.t be opened|cannot open (?:the )?mrl|http[^\n]*error: HTTP/i.test(diagnostics)) {
                 failure = 'VLC could not open this track.';
             }

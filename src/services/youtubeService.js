@@ -124,7 +124,7 @@ function createYoutube({ fetcher = fetch, spawnProcess = spawn, killProcess = pr
                     const { YOUTUBE_API_KEY, AUDIUS_API_KEY, AUDIUS_BEARER_TOKEN, ...childEnv } = env;
                     child = spawnProcess(env.YT_DLP_PATH || 'yt-dlp', [
                         '--ignore-config', '--no-playlist', '--no-cache-dir', '--no-progress', '--no-warnings',
-                        '--skip-download', '--dump-single-json', '--socket-timeout', '15',
+                        '--skip-download', '--dump-single-json', '--check-formats', '--socket-timeout', '15',
                         '--retries', '1', '--extractor-retries', '1',
                         '--js-runtimes', 'node:' + process.execPath,
                         '--format', 'best[protocol=https]/bestvideo[protocol=https]+bestaudio[protocol=https]/best',
@@ -181,6 +181,9 @@ function createYoutube({ fetcher = fetch, spawnProcess = spawn, killProcess = pr
                     signal?.removeEventListener('abort', abort);
                     if (failure) return reject(failure);
                     if (code !== 0) {
+                        if (/Requested format is not available|No video formats found|HTTP Error 403|403 Forbidden/i.test(diagnostics)) {
+                            return reject(new Error('YouTube did not provide a playable public stream. Try another video or update yt-dlp.'));
+                        }
                         const message = /network|connection|timed out|unable to download|resolve|HTTP Error 5/i.test(diagnostics)
                             ? 'Could not reach the YouTube video. Check your connection and try again.'
                             : 'This video could not be opened. It may be unavailable or restricted. Update yt-dlp and try another video.';

@@ -106,6 +106,10 @@ test('enables a visible video window and passes separate audio and HTTP headers 
         userAgent: 'Test agent', referrer: 'https://www.youtube.com/'
     });
     assert.ok(calls[0].args.includes('--video'));
+    if (process.platform === 'darwin') {
+        assert.equal(calls[0].args[calls[0].args.indexOf('-I') + 1], 'macosx');
+        assert.equal(calls[0].args[calls[0].args.indexOf('--extraintf') + 1], 'oldrc');
+    }
     assert.ok(calls[0].args.includes('--no-embedded-video'));
     assert.ok(!calls[0].args.includes('--no-video'));
     assert.ok(calls[0].args.includes('--input-slave=https://media.example/audio?x=1&y=2'));
@@ -118,5 +122,24 @@ test('enables a visible video window and passes separate audio and HTTP headers 
     assert.equal(calls[0].child.commands.at(-1), 'pause');
     await player.play('/music.mp3', 'Music');
     assert.ok(calls[1].args.includes('--no-video'));
+    assert.equal(calls[1].args[calls[1].args.indexOf('-I') + 1], 'oldrc');
     assert.ok(!calls[1].args.some(arg => arg.startsWith('--input-slave=')));
+});
+
+test('reports rejected streams and missing macOS video interface without leaving VLC running', async t => {
+    for (const [diagnostic, expected] of [
+        ['access stream error: HTTP 403 error\n', /HTTP 403.*fresh stream/],
+        ['macosx window error: Cannot create vout as Mac OS X interface was not found\n', /video window/]
+    ]) {
+        const child = mockVlc();
+        const player = new VlcPlayer({ executable: () => 'vlc', spawnProcess: () => child });
+        t.after(() => player.stop());
+        await player.play('https://media.example/video', 'Video', { video: true });
+        const closed = player.session.closed;
+        child.stderr.write(diagnostic);
+        await closed;
+        assert.equal(player.status, 'Stopped');
+        assert.equal(player.session, null);
+        assert.match(player.error, expected);
+    }
 });

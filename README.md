@@ -64,7 +64,7 @@ Choose **YouTube Video Player**, the third entry in the main menu. Paste a video
 
 For a pasted URL, yt-dlp retrieves the video's title, channel, and duration and displays one result. For keywords, the official YouTube Data API returns up to ten results. Each result shows its metadata and video URL. Use ↑/↓ to select a result and Enter to play. Press **S** to paste a different URL or search again.
 
-VLC opens a separate video window. Keep Terminal focused when using the CLI keyboard shortcuts. Both video and audio are requested. When YouTube provides separate streams, VLC receives the audio through its input-slave option. Combined streams are preferred. The player resolves fresh stream URLs for each playback attempt and stops the previous VLC process before starting another. Leaving the mode or quitting also terminates any pending yt-dlp lookup.
+VLC opens a separate video window. On macOS, the player loads VLC's macOS interface together with its remote-control interface so video windows and terminal controls are both available. Keep Terminal focused when using the CLI keyboard shortcuts. Both video and audio are requested. When YouTube provides separate streams, VLC receives the audio through its input-slave option. Combined streams are preferred. The player resolves fresh stream URLs for each playback attempt and asks yt-dlp to check format availability before handing a stream to VLC. It stops the previous VLC process before starting another. Leaving the mode or quitting also terminates any pending yt-dlp lookup.
 
 yt-dlp runs with configuration files disabled, metadata-only output, and downloads skipped. The player does not save videos or merge media files. Use videos you are authorized to access and play.
 
@@ -143,6 +143,7 @@ flowchart LR
 | YouTube search needs a key | Enable YouTube Data API v3 and configure `YOUTUBE_API_KEY` in `.env`. |
 | YouTube search is denied | Check API enablement, key restrictions, and remaining quota in your Google Cloud project. |
 | A YouTube video cannot be opened | Update yt-dlp and try another public video. Private, age-restricted, region-blocked, deleted, or sign-in-required videos may be unavailable. |
+| The media server rejects a stream with HTTP 403 | Press Enter to resolve and validate a fresh stream. If it continues, update yt-dlp or choose another video. |
 | Video keyboard controls do not respond | Click back into Terminal. The shortcuts are handled by the terminal application. |
 
 ## Known limitations

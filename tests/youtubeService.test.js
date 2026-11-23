@@ -139,6 +139,7 @@ test('extracts metadata with spawn arguments, no shell, and no downloads', async
     assert.equal(call.args.at(-1), url);
     assert.equal(call.args.at(-2), '--');
     assert.ok(call.args.includes('--skip-download'));
+    assert.ok(call.args.includes('--check-formats'));
     assert.ok(call.args.includes('--ignore-config'));
     assert.ok(call.args.includes('--no-playlist'));
     assert.equal(call.options.shell, undefined);
@@ -151,6 +152,7 @@ test('extracts metadata with spawn arguments, no shell, and no downloads', async
 test('extraction handles unavailable videos, network errors, malformed output and missing yt-dlp', async () => {
     for (const [mock, expected] of [
         [fakeExtractor({}, { code: 1, stderr: 'Video unavailable' }), /unavailable or restricted/],
+        [fakeExtractor({}, { code: 1, stderr: 'Requested format is not available' }), /playable public stream/],
         [fakeExtractor({}, { code: 1, stderr: 'Unable to download webpage: connection reset' }), /connection/],
         [fakeExtractor('bad json'), /unreadable video metadata/]
     ]) await assert.rejects(createYoutube(mock).extract(url), expected);
