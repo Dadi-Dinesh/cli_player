@@ -92,3 +92,31 @@ test('reports spawn failures and handles unavailable audio output', async t => {
     assert.equal(second.status, 'Stopped');
     assert.match(second.error, /audio output device/);
 });
+
+test('enables a visible video window and passes separate audio and HTTP headers as arguments', async t => {
+    const calls = [];
+    const player = new VlcPlayer({ executable: () => 'vlc', spawnProcess: (executable, args, options) => {
+        const child = mockVlc();
+        calls.push({ args, options, child });
+        return child;
+    } });
+    t.after(() => player.stop());
+    await player.play('https://media.example/video', 'Video', {
+        video: true, audioSource: 'https://media.example/audio?x=1&y=2',
+        userAgent: 'Test agent', referrer: 'https://www.youtube.com/'
+    });
+    assert.ok(calls[0].args.includes('--video'));
+    assert.ok(calls[0].args.includes('--no-embedded-video'));
+    assert.ok(!calls[0].args.includes('--no-video'));
+    assert.ok(calls[0].args.includes('--input-slave=https://media.example/audio?x=1&y=2'));
+    assert.ok(calls[0].args.includes('--http-user-agent=Test agent'));
+    assert.ok(calls[0].args.includes('--http-referrer=https://www.youtube.com/'));
+    assert.equal(calls[0].args.at(-1), 'https://media.example/video');
+    assert.equal(calls[0].options.shell, undefined);
+    calls[0].child.stdout.write('status change: ( play state: 3 )\r\n');
+    player.togglePause();
+    assert.equal(calls[0].child.commands.at(-1), 'pause');
+    await player.play('/music.mp3', 'Music');
+    assert.ok(calls[1].args.includes('--no-video'));
+    assert.ok(!calls[1].args.some(arg => arg.startsWith('--input-slave=')));
+});

@@ -2,6 +2,8 @@ const readline = require('node:readline');
 const { VlcPlayer } = require('./player/vlcPlayer');
 const { createAudius } = require('./services/audiusApi');
 const { scanSongs } = require('./modes/offlineMode');
+const { loadYoutube } = require('./modes/youtubeMode');
+const { createYoutube } = require('./services/youtubeService');
 const { screen } = require('./ui/screen');
 
 function wrap(index, delta, length) {
@@ -10,7 +12,7 @@ function wrap(index, delta, length) {
 
 function run({
     input = process.stdin, output = process.stdout, player = new VlcPlayer(),
-    audius = createAudius(), scan = scanSongs
+    audius = createAudius(), scan = scanSongs, youtube = createYoutube()
 } = {}) {
     if (!input.isTTY || !output.isTTY) throw new Error('Open this player in an interactive terminal.');
 
@@ -52,8 +54,9 @@ function run({
     async function loadTracks() {
         const { mode, input: text } = view;
         const query = text.trim();
-        if (mode === 'online' && !query) {
-            view.notice = 'Enter a title, artist, or keyword.';
+        if (mode !== 'offline' && !query) {
+            view.notice = mode === 'youtube' ? 'Enter a YouTube video URL or search keywords.'
+                : 'Enter a title, artist, or keyword.';
             return render();
         }
         const request = new AbortController();
@@ -61,7 +64,10 @@ function run({
         view = { page: 'tracks', mode, query, tracks: [], selected: 0, notice: 'Loading…' };
         render();
         try {
-            const tracks = mode === 'offline' ? await scan(text) : await audius.search(query, request.signal);
+            let tracks;
+            if (mode === 'offline') tracks = await scan(text);
+            else if (mode === 'youtube') tracks = await loadYoutube(query, youtube, request.signal);
+            else tracks = await audius.search(query, request.signal);
             if (request.signal.aborted) return;
             view.tracks = tracks;
             view.notice = tracks.length ? '' : mode === 'offline'
@@ -84,13 +90,24 @@ function run({
         view.notice = '';
         const request = new AbortController();
         pending = request;
-        view.loadingTrack = view.mode === 'online';
+        view.loadingTrack = view.mode !== 'offline';
         render();
         try {
-            const source = track.source || await audius.stream(track, request.signal);
+            let source;
+            let playback;
+            if (view.mode === 'youtube') {
+                const video = await youtube.extract(track.url, request.signal);
+                if (request.signal.aborted) return;
+                const { playback: resolved, ...metadata } = video;
+                Object.assign(track, metadata);
+                playback = resolved;
+                source = resolved.source;
+            } else {
+                source = track.source || await audius.stream(track, request.signal);
+            }
             if (request.signal.aborted) return;
             view.loadingTrack = false;
-            await player.play(source, track.artist ? track.title + ' — ' + track.artist : track.title);
+            await player.play(source, track.artist ? track.title + ' — ' + track.artist : track.title, playback);
         } catch (error) {
             if (request.signal.aborted) return;
             view.notice = error.message;
@@ -140,7 +157,7 @@ function run({
             if (name === 'return' || name === 'enter') showMenu();
             return;
         }
-        const length = view.page === 'menu' ? 3 : view.tracks.length;
+        const length = view.page === 'menu' ? 4 : view.tracks.length;
         if (name === 'up' || name === 'down') {
             view.selected = wrap(view.selected, name === 'up' ? -1 : 1, length);
             if (view.page === 'menu') menuSelection = view.selected;
@@ -148,8 +165,8 @@ function run({
         }
         if (view.page === 'menu') {
             if (name !== 'return' && name !== 'enter') return;
-            if (menuSelection === 2) return void exit();
-            return showPrompt(menuSelection === 0 ? 'offline' : 'online');
+            if (menuSelection === 3) return void exit();
+            return showPrompt(['offline', 'online', 'youtube'][menuSelection]);
         }
 
         if (name === 'b' || name === 'escape') return showMenu();

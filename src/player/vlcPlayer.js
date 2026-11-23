@@ -47,17 +47,21 @@ class VlcPlayer extends EventEmitter {
         this.emit('change');
     }
 
-    async play(source, track) {
+    async play(source, track, { video = false, audioSource, userAgent, referrer } = {}) {
         const request = ++this.request;
         await this.closeSession();
         if (request !== this.request) return;
 
         let child;
         try {
-            const { AUDIUS_API_KEY, AUDIUS_BEARER_TOKEN, ...env } = process.env;
+            const { AUDIUS_API_KEY, AUDIUS_BEARER_TOKEN, YOUTUBE_API_KEY, ...env } = process.env;
             child = this.spawnProcess(this.executable(), [
                 '--ignore-config', '-I', 'oldrc', '--rc-fake-tty', '--no-media-library',
-                '--no-video', '--play-and-exit', '--no-volume-save',
+                ...(video ? ['--video', '--no-embedded-video'] : ['--no-video']),
+                ...(audioSource ? ['--input-slave=' + audioSource] : []),
+                ...(userAgent ? ['--http-user-agent=' + userAgent] : []),
+                ...(referrer ? ['--http-referrer=' + referrer] : []),
+                '--play-and-exit', '--no-volume-save',
                 ...(process.platform === 'darwin' ? ['--auhal-volume=' + toVlcVolume(this.volume)] : []),
                 ...this.extraArgs, '--', source
             ], { env, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -108,6 +112,8 @@ class VlcPlayer extends EventEmitter {
             diagnostics = (diagnostics + chunk).slice(-4096);
             if (/failed to create audio output|module not functional/i.test(diagnostics)) {
                 failure = 'VLC could not open an audio output device.';
+            } else if (/video output creation failed|failed to create video output/i.test(diagnostics)) {
+                failure = 'VLC could not open a video window. Try launching from macOS Terminal.';
             } else if (/your input can.t be opened|cannot open (?:the )?mrl|http[^\n]*error: HTTP/i.test(diagnostics)) {
                 failure = 'VLC could not open this track.';
             }
