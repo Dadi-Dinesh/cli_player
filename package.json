@@ -17,7 +17,7 @@
     "url": "https://github.com/Dadi-Dinesh/cli_player/issues"
   },
   "homepage": "https://github.com/Dadi-Dinesh/cli_player#readme",
-  "description": "Dual-mode VLC music player for the terminal",
+  "description": "VLC multimedia player with offline music, Audius, and YouTube modes",
   "engines": {
     "node": ">=22"
   }

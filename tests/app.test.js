@@ -12,9 +12,10 @@ function start(t, options) {
     input.setRawMode = raw => { input.isRaw = raw; };
     output.columns = 100;
     const player = Object.assign(new EventEmitter(), {
-        status: 'Stopped', track: null, volume: 100, sources: [],
-        async play(source, title) {
+        status: 'Stopped', track: null, volume: 100, sources: [], playbackOptions: [],
+        async play(source, title, options) {
             this.sources.push(source);
+            this.playbackOptions.push(options);
             this.track = title;
             this.status = 'Playing';
             this.emit('change');
@@ -153,4 +154,107 @@ test('leaving online mode aborts a pending stream and ignores a late result', as
     await flush();
     assert.deepEqual(ui.player.sources, []);
     assert.match(ui.frame(), /OFFLINE MUSIC/);
+});
+
+test('YouTube search displays metadata and URLs and reuses all playback controls', async t => {
+    const queries = [];
+    const tracks = [
+        { id: 'BaW_jenozKc', title: 'Test video', artist: 'Test channel', duration: 12, url: 'https://youtu.be/BaW_jenozKc' },
+        { id: 'jNQXAC9IVRw', title: 'Another video', artist: 'Channel', duration: 60, url: 'https://youtu.be/jNQXAC9IVRw' }
+    ];
+    const ui = start(t, {
+        youtube: {
+            search: async query => { queries.push(query); return tracks; },
+            extract: async url => ({ ...tracks.find(track => track.url === url), playback: {
+                source: 'https://media.example/' + url.split('/').at(-1), video: true,
+                audioSource: 'https://media.example/audio'
+            } })
+        }
+    });
+    ui.type('\r\x1b[B\x1b[B\r');
+    assert.match(ui.frame(), /YOUTUBE VIDEO MODE/);
+    assert.match(ui.frame(), /YouTube video URL/);
+    ui.type('quiet birds\r');
+    await flush();
+    assert.deepEqual(queries, ['quiet birds']);
+    assert.match(ui.frame(), /Test video — Test channel \[0:12\]/);
+    assert.match(ui.frame(), /https:\/\/youtu.be\/BaW_jenozKc/);
+    ui.type('\x1b[B\r');
+    await flush();
+    assert.equal(ui.player.sources.at(-1), 'https://media.example/jNQXAC9IVRw');
+    assert.deepEqual(ui.player.playbackOptions.at(-1), {
+        source: 'https://media.example/jNQXAC9IVRw', video: true, audioSource: 'https://media.example/audio'
+    });
+    ui.type('p+');
+    assert.match(ui.frame(), /Paused.*110%/);
+    ui.type(' -');
+    assert.match(ui.frame(), /Playing.*100%/);
+    ui.type('\x1b[C');
+    await flush();
+    assert.equal(ui.player.sources.at(-1), 'https://media.example/BaW_jenozKc');
+    ui.type('\x1b[D');
+    await flush();
+    assert.equal(ui.player.sources.at(-1), 'https://media.example/jNQXAC9IVRw');
+    ui.type('b');
+    assert.equal(ui.player.status, 'Stopped');
+    assert.match(ui.frame(), /> 3\. YOUTUBE VIDEO PLAYER/);
+    ui.type('\x1b[B\r');
+    await flush();
+    assert.equal(ui.input.isRaw, false);
+});
+
+test('YouTube URL flow retrieves metadata, refreshes streams on selection, and recovers from failures', async t => {
+    const calls = [];
+    const url = 'https://youtu.be/BaW_jenozKc';
+    const ui = start(t, {
+        youtube: {
+            search: async () => [],
+            extract: async input => {
+                calls.push(input);
+                if (input.includes('invalid')) throw Error('Enter a valid YouTube video URL.');
+                if (calls.length === 2) throw Error('This video could not be opened.');
+                return { title: 'Resolved title', artist: 'Channel', duration: 12, url,
+                    playback: { source: 'https://media.example/fresh-' + calls.length, video: true } };
+            }
+        }
+    });
+    ui.type('\r\x1b[B\x1b[B\r' + url + '\r');
+    await flush();
+    assert.match(ui.frame(), /Resolved title/);
+    assert.deepEqual(ui.player.sources, []);
+    ui.type('\r');
+    await flush();
+    assert.match(ui.frame(), /could not be opened/);
+    ui.type('\r');
+    await flush();
+    assert.equal(ui.player.sources.at(-1), 'https://media.example/fresh-3');
+    ui.type('shttps://invalid.example/video\r');
+    await flush();
+    assert.match(ui.frame(), /valid YouTube video URL/);
+    assert.equal(ui.player.status, 'Stopped');
+    ui.type('\x03');
+    await flush();
+    assert.equal(ui.input.isRaw, false);
+});
+
+test('leaving YouTube cancels a pending extraction and ignores its late result', async t => {
+    let finish;
+    let signal;
+    const ui = start(t, {
+        youtube: {
+            search: async () => [{ title: 'Track', url: 'https://youtu.be/BaW_jenozKc' }],
+            extract: (_url, requestSignal) => {
+                signal = requestSignal;
+                return new Promise(resolve => { finish = resolve; });
+            }
+        }
+    });
+    ui.type('\r\x1b[B\x1b[B\rtest\r');
+    await flush();
+    ui.type('\rb');
+    assert.equal(signal.aborted, true);
+    finish({ title: 'Too late', playback: { source: 'https://media.example/video', video: true } });
+    await flush();
+    assert.deepEqual(ui.player.sources, []);
+    assert.match(ui.frame(), /> 3\. YOUTUBE VIDEO PLAYER/);
 });
